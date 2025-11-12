@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export interface PalmLandmark {
@@ -33,42 +32,29 @@ export function usePalmData() {
 
   const checkPalmRegistration = async () => {
     if (!user) return;
-
     try {
-      const { data, error } = await supabase
-        .from('palm_data')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL}/palm/status?user_id=${encodeURIComponent(user.id)}`
+      );
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Failed to check palm status');
 
-      if (error) throw error;
-
-      setStatus({
-        hasRegistered: !!data,
-        loading: false,
-        error: null,
-      });
+      setStatus({ hasRegistered: !!json.hasRegistered, loading: false, error: null });
     } catch (error) {
-      setStatus({
-        hasRegistered: false,
-        loading: false,
-        error: (error as Error).message,
-      });
+      setStatus({ hasRegistered: false, loading: false, error: (error as Error).message });
     }
   };
 
   const registerPalm = async (landmarks: PalmLandmark[]) => {
     if (!user) throw new Error('User not authenticated');
 
-    const { error } = await supabase
-      .from('palm_data')
-      .upsert({
-        user_id: user.id,
-        landmarks_json: landmarks,
-        updated_at: new Date().toISOString(),
-      });
-
-    if (error) throw error;
+    const resp = await fetch(`${import.meta.env.VITE_API_URL}/palm/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, landmarks }),
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json?.error || 'Failed to register palm');
 
     await checkPalmRegistration();
   };
@@ -76,19 +62,15 @@ export function usePalmData() {
   const verifyPalm = async (landmarks: PalmLandmark[]): Promise<boolean> => {
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('palm_data')
-      .select('landmarks_json')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const resp = await fetch(`${import.meta.env.VITE_API_URL}/palm/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user.id, landmarks }),
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json?.error || 'Verification failed');
 
-    if (error) throw error;
-    if (!data) throw new Error('No palm data registered');
-
-    const storedLandmarks = data.landmarks_json as PalmLandmark[];
-    const similarity = calculateCosineSimilarity(landmarks, storedLandmarks);
-
-    return similarity >= 0.85;
+    return !!json.isVerified;
   };
 
   return {

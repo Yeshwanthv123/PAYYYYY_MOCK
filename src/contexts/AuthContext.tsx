@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -16,25 +15,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Try to restore user from localStorage (set by signIn/signUp)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    try {
+      const raw = localStorage.getItem('auth_user');
+      if (raw) {
+        setUser(JSON.parse(raw) as User);
+      }
+    } catch {
+      // ignore
+    } finally {
       setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setUser(session?.user ?? null);
-      })();
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return { error };
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) return { error: new Error(data?.error || 'Signup failed') };
+
+      const newUser = data.user ?? data.session?.user ?? null;
+      if (newUser) {
+        setUser(newUser);
+        try {
+          localStorage.setItem('auth_user', JSON.stringify(newUser));
+        } catch {}
+      }
+
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -43,8 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error };
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) return { error: new Error(data?.error || 'Signin failed') };
+
+      const newUser = data.user ?? data.session?.user ?? null;
+      if (newUser) {
+        setUser(newUser);
+        try {
+          localStorage.setItem('auth_user', JSON.stringify(newUser));
+        } catch {}
+      }
+
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -52,7 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setUser(null);
+    try {
+      localStorage.removeItem('auth_user');
+    } catch {}
+    // backend signout is not required for this flow (stateless token)
+    return;
   };
 
   return (
