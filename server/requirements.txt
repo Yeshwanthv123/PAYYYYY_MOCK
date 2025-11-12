@@ -1,6 +1,7 @@
 fastapi==0.100.0
 uvicorn[standard]==0.23.2
-SQLAlchemy==2.1.0
+# Use a stable SQLAlchemy 2.0.x release available on PyPI
+SQLAlchemy==2.0.44
 psycopg2-binary==2.9.10
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0

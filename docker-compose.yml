@@ -30,11 +30,13 @@ services:
       args:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
-        VITE_API_URL: http://backend:8000
+        # Use localhost so the browser can reach the backend (backend is published on host:8000)
+        VITE_API_URL: http://localhost:8000
     ports:
       - '5173:80'
     environment:
-      - VITE_API_URL=http://backend:8000
+      # Also set at container runtime (not strictly necessary for static build but kept for clarity)
+      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped
